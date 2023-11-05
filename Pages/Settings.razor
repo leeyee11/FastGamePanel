@@ -1,0 +1,121 @@
+﻿@page "/settings"
+@using FastGamePanel.Services; 
+@using FastGamePanel.Common;
+@inject DisplaySettingService displayService;
+@inject PowerSettingService powerService;
+
+<h1>Settings</h1>
+
+
+<label role="status">Display Settings</label>
+<select class="btn" @bind="targetResolution">
+    @foreach (var resolution in supportedResolutions)
+    {
+        <option value="@resolution">@resolution</option>
+    }
+</select>
+<select class="btn" @bind="targetFrequency">
+    @foreach (var frequency in supportedFrequencies)
+    {
+        <option value="@frequency">@frequency</option>
+    }
+</select>
+<br/>
+<label role="status">Power Mode</label>
+<select class="btn" @bind="targetPowerMode">
+    @foreach (var mode in (PowerMode[])Enum.GetValues(typeof(PowerMode)))
+    {
+        <option value="@mode">@mode</option>
+    }
+</select>
+<br/>
+<button class="btn btn-primary" @onclick="UpdateSettings">Apply</button>
+
+
+@code {
+    private string originFrequency;
+    private string originResolution;
+    private string originPowerMode;
+    private string targetFrequency;
+    private string targetResolution;
+    private string targetPowerMode;
+    public List<DisplayMode> supportedDisplayModes = new List<DisplayMode>();
+    public List<string> supportedPowerModes = new List<string>() { "PowerSaver", "Balanced", "HighPerformance", "Custom" };
+
+    protected override void OnInitialized()
+    {
+        var mode = displayService.GetCurrentDisplayMode();
+        originResolution = targetResolution = $"{mode.width}x{mode.height}";
+        originFrequency = targetFrequency = $"{mode.frequency}Hz";
+        originPowerMode = targetPowerMode = powerService.GetPowerMode().ToString();
+        supportedDisplayModes = displayService.GetSupportedDisplayModes();
+    }
+
+    private List<string> supportedResolutions
+    {
+        get
+        {
+            return supportedDisplayModes
+            .Select(x => $"{x.width}x{x.height}")
+            .ToHashSet()
+            .ToList();
+        }
+    }
+    private List<string> supportedFrequencies
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(targetResolution))
+            {
+                return new List<string>();
+            }
+            var resParams = targetResolution.Split("x");
+            var width = int.Parse(resParams[0]);
+            var height = int.Parse(resParams[1]);
+            return supportedDisplayModes
+            .Where(x => x.width == width && x.height == height)
+            .Select(x => $"{x.frequency}Hz")
+            .ToHashSet()
+            .ToList();
+        }
+    }
+
+    private void UpdateDisplaySettings()
+    {
+        if (string.IsNullOrEmpty(targetResolution) || string.IsNullOrEmpty(targetFrequency))
+        {
+            return;
+        }
+        var resParams = targetResolution.Split("x");
+        var width = int.Parse(resParams[0]);
+        var height = int.Parse(resParams[1]);
+        var frequency = int.Parse(targetFrequency.Replace("Hz", ""));
+        displayService.ChangeDisplaySettings(width, height, frequency);
+    }
+
+    private void UpdatePowerMode()
+    {
+        if (string.IsNullOrEmpty(targetPowerMode))
+        {
+            return;
+        }
+        var powerMode = Enum.GetValues(typeof(PowerMode)).Cast<PowerMode>().ToList().Find(x => x.ToString() == targetPowerMode);
+        powerService.SwitchPowerMode(powerMode);
+    }
+
+    public void UpdateSettings()
+    {
+        if (originFrequency != targetFrequency || originResolution != targetResolution)
+        {
+            UpdateDisplaySettings();
+            originFrequency = targetFrequency;
+            originResolution = targetResolution;
+        }
+        if (originPowerMode != targetPowerMode)
+        {
+            UpdatePowerMode();
+            originPowerMode = targetPowerMode;
+        }
+        OnInitialized();
+    }
+}
