@@ -1,8 +1,4 @@
-﻿using System;
-using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
-using Microsoft.Maui.Devices;
-using FastGamePanel.Utils;
+﻿using FastGamePanel.Utils;
 using FastGamePanel.Common;
 
 namespace FastGamePanel.Services;

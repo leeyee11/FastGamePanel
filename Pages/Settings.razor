@@ -3,10 +3,10 @@
 @using FastGamePanel.Common;
 @inject DisplaySettingService displayService;
 @inject PowerSettingService powerService;
+@inject RemappingService remappingService;
+@implements IDisposable
 
-<h1>Settings</h1>
-
-
+<h3>Display Settings</h3>
 <label role="status">Display Settings</label>
 <select class="btn" @bind="targetResolution">
     @foreach (var resolution in supportedResolutions)
@@ -21,6 +21,7 @@
     }
 </select>
 <br/>
+<h3>Power Settings</h3>
 <label role="status">Power Mode</label>
 <select class="btn" @bind="targetPowerMode">
     @foreach (var mode in (PowerMode[])Enum.GetValues(typeof(PowerMode)))
@@ -32,25 +33,26 @@
 <button class="btn btn-primary" @onclick="UpdateSettings">Apply</button>
 
 
+<h3>Key Mappings</h3>
+<label role="status">Key Mapping @isRemappingEnabled</label>
+<br/>
+<button class="btn btn-primary" @onclick="ToggleKeyRemapping">Switch</button>
+<br/>
+<label role="status">Key Pressed: @pressedKeyCode</label>
+<br/>
+<button class="btn btn-primary" @onclick="SwitchKeystrokeListenState">
+    @(isListeningKeystroke ? "Stop listening" : "Start Listening")
+</button>
+
+
 @code {
+
+    #region display settings variables
     private string originFrequency;
     private string originResolution;
-    private string originPowerMode;
     private string targetFrequency;
     private string targetResolution;
-    private string targetPowerMode;
     public List<DisplayMode> supportedDisplayModes = new List<DisplayMode>();
-    public List<string> supportedPowerModes = new List<string>() { "PowerSaver", "Balanced", "HighPerformance", "Custom" };
-
-    protected override void OnInitialized()
-    {
-        var mode = displayService.GetCurrentDisplayMode();
-        originResolution = targetResolution = $"{mode.width}x{mode.height}";
-        originFrequency = targetFrequency = $"{mode.frequency}Hz";
-        originPowerMode = targetPowerMode = powerService.GetPowerMode().ToString();
-        supportedDisplayModes = displayService.GetSupportedDisplayModes();
-    }
-
     private List<string> supportedResolutions
     {
         get
@@ -78,6 +80,36 @@
             .ToHashSet()
             .ToList();
         }
+    }
+    #endregion
+
+    #region power mode variables
+    private string originPowerMode;
+    private string targetPowerMode;
+    #endregion
+
+    #region key mapping variables
+    private int? pressedKeyCode = null;
+    private bool isRemappingEnabled = false;
+    private bool isListeningKeystroke = false;
+    private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+    private Task keystrokeListeningTask;
+    #endregion
+
+    protected override void OnInitialized()
+    {
+        var mode = displayService.GetCurrentDisplayMode();
+        originResolution = targetResolution = $"{mode.width}x{mode.height}";
+        originFrequency = targetFrequency = $"{mode.frequency}Hz";
+        originPowerMode = targetPowerMode = powerService.GetPowerMode().ToString();
+        supportedDisplayModes = displayService.GetSupportedDisplayModes();
+        remappingService.SetKeyboardHook();
+        isRemappingEnabled = remappingService.GetIsRemappingEnabled();
+    }
+
+    public void Dispose()
+    {
+        remappingService.UnsetKeyboardHook();
     }
 
     private void UpdateDisplaySettings()
@@ -117,5 +149,41 @@
             originPowerMode = targetPowerMode;
         }
         OnInitialized();
+    }
+
+    public void ToggleKeyRemapping()
+    {
+        isRemappingEnabled = !isRemappingEnabled;
+        if (isRemappingEnabled)
+        {
+            remappingService.EnableRemapping();
+        }
+        else
+        {
+            remappingService.DisableRemapping();
+        }
+    }
+
+    public void SwitchKeystrokeListenState()
+    {
+        if (!isListeningKeystroke)
+        {
+            keystrokeListeningTask = GetNextPressedKey(cancellationTokenSource.Token);
+        }
+        isListeningKeystroke = !isListeningKeystroke;
+    }
+
+    public async Task GetNextPressedKey(CancellationToken token)
+    {
+        var keyCode = await remappingService.GetNextKeystroke();
+        if (!token.IsCancellationRequested)
+        {
+            pressedKeyCode = keyCode;
+            this.StateHasChanged();
+            if (isListeningKeystroke)
+            {
+                keystrokeListeningTask = GetNextPressedKey(token);
+            }
+        }
     }
 }

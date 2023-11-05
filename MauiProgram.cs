@@ -30,6 +30,8 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton<PowerSettingService>();
 
+		builder.Services.AddSingleton<RemappingService>();
+
         return builder.Build();
 	}
 }
